@@ -1,144 +1,74 @@
-"use client";
-import React, { useEffect, useState } from "react";
-import { ReclaimProofRequest } from "@reclaimprotocol/js-sdk";
-import { Proof } from "@reclaimprotocol/js-sdk";
-import { useQRCode } from "next-qrcode";
-import Link from "next/link";
+import { Badge } from '@/components/badge'
+import { Divider } from '@/components/divider'
+import { Heading } from '@/components/heading'
+import { Input, InputGroup } from '@/components/input'
+import { Link } from '@/components/link'
+import { Select } from '@/components/select'
+import { getSellingAccounts } from '@/data'
+import { MagnifyingGlassIcon, UsersIcon } from '@heroicons/react/16/solid'
+import { SellAccount } from './sellAccount'
 
-export default function Home() {
-  const [verificationReqUrl, setVerificationReqUrl] = useState<
-    string | undefined
-  >("");
-  const [extracted, setExtracted] = useState<any>(null);
-  const { Canvas } = useQRCode();
-  const [reclaimProofRequest, setReclaimProofRequest] =
-    useState<ReclaimProofRequest | null>(null);
-
-  useEffect(() => {
-    // Initialize the ReclaimProofRequest when the component mounts
-    initializeReclaimProofRequest();
-  }, []);
-
-  async function initializeReclaimProofRequest() {
-    try {
-      // ReclaimProofRequest Fields:
-      // - applicationId: Unique identifier for your application
-      // - providerId: Identifier for the specific provider you're using
-      // - sessionId: Unique identifier for the current proof request session
-      // - context: Additional context information for the proof request
-      // - requestedProof: Details of the proof being requested
-      // - signature: Cryptographic signature for request authentication
-      // - redirectUrl: URL to redirect after proof generation (optional)
-      // - appCallbackUrl: URL for receiving proof generation updates (optional)
-      // - timeStamp: Timestamp of the proof request
-      // - options: Additional configuration options
-
-      const proofRequest = await ReclaimProofRequest.init(
-        process.env.NEXT_PUBLIC_RECLAIM_APP_ID!,
-        process.env.NEXT_PUBLIC_RECLAIM_APP_SECRET!,
-        "f9f383fd-32d9-4c54-942f-5e9fda349762" // providerId
-        // Uncomment the following line to enable logging and AI providers
-        // { log: true, acceptAiProviders: true }
-      );
-      setReclaimProofRequest(proofRequest);
-
-      // Add context to the proof request (optional)
-      proofRequest.addContext("0x00000000000", "Example context message");
-
-      // Set parameters for the proof request (if needed)
-      // proofRequest.setParams({ email: "test@example.com", userName: "testUser" })
-
-      // Set a redirect URL (if needed)
-      // proofRequest.setRedirectUrl('https://example.com/redirect')
-
-      // Set a custom app callback URL (if needed)
-      // proofRequest.setAppCallbackUrl('https://example.com/callback')
-
-      // Uncomment the following line to log the proof request and to get the Json String
-      // console.log('Proof request initialized:', proofRequest.toJsonString())
-    } catch (error) {
-      console.error("Error initializing ReclaimProofRequest:", error);
-    }
-  }
-
-  async function startVerificationSession() {
-    if (!reclaimProofRequest) {
-      console.error("ReclaimProofRequest not initialized");
-      return;
-    }
-
-    try {
-      // Generate the request URL for QR code
-      const requestUrl = await reclaimProofRequest.getRequestUrl();
-      setVerificationReqUrl(requestUrl);
-
-      // Get the status URL for checking proof status
-      const statusUrl = reclaimProofRequest.getStatusUrl();
-      console.log("Status URL:", statusUrl);
-
-      // Start the verification session
-      await reclaimProofRequest.startSession({
-        onSuccess: async (proof: Proof) => {
-          console.log("Proof received:", proof);
-
-          setExtracted(JSON.stringify(proof.claimData.context));
-        },
-        onError: (error: Error) => {
-          console.error("Error in proof generation:", error);
-        },
-      });
-    } catch (error) {
-      console.error("Error starting verification session:", error);
-    }
-  }
+export default async function Home() {
+  let accounts = await getSellingAccounts()
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="max-w-5xl gap-2 w-full items-center justify-between font-mono text-sm lg:flex lg:flex-col lg:gap-10">
-        <h1 className="text-2xl font-bold mb-4">Reclaim SDK Demo</h1>
-        {!verificationReqUrl && (
-          <button
-            onClick={startVerificationSession}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-          >
-            Create Claim QR Code
-          </button>
-        )}
-        {verificationReqUrl && (
-          <div>
-            <p className="mb-2">
-              Scan this QR code to start the verification process:
-            </p>
-            <Link href={verificationReqUrl} target="_blank">
-              <Canvas
-                text={verificationReqUrl}
-                options={{
-                  errorCorrectionLevel: "M",
-                  margin: 3,
-                  scale: 4,
-                  width: 200,
-                  color: {
-                    dark: "#000000ff",
-                    light: "#ffffffff",
-                  },
-                }}
-              />
-            </Link>
+    <>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-sm:w-full sm:flex-1">
+          <Heading>Buy Accounts</Heading>
+          <div className="mt-4 flex max-w-xl gap-4">
+            <div className="flex-1">
+              <InputGroup>
+                <MagnifyingGlassIcon />
+                <Input name="search" placeholder="Search accounts&hellip;" />
+              </InputGroup>
+            </div>
+            <div>
+              <Select name="sort_by">
+                <option value="name">Sort by name</option>
+                <option value="date">Sort by date</option>
+                <option value="status">Sort by status</option>
+              </Select>
+            </div>
           </div>
-        )}
-        {extracted && (
-          <div className="mt-4">
-            <h2 className="text-xl font-semibold mb-2">Extracted Data:</h2>
-            <pre className="bg-gray-100 p-4 rounded">{extracted}</pre>
-          </div>
-        )}
-        {!extracted && verificationReqUrl && (
-          <div className="mt-4">
-            <p>Waiting for proof generation...</p>
-            {/* Add a loading spinner here if desired */}
-          </div>
-        )}
+        </div>
+        <SellAccount>Sell Your Account</SellAccount>
+        {/* <Button>Sell Your Account</Button> */}
       </div>
-    </main>
-  );
+      <ul className="mt-10">
+        {accounts.map((account, index) => (
+          <>
+            <li key={account.id}>
+              <Divider soft={index > 0} />
+              <div className="flex items-center justify-between">
+                <div key={account.id} className="flex gap-6 py-6">
+                  <div className="w-32 shrink-0">
+                    <Link href={`/accounts/${account.id}`} aria-hidden="true">
+                      <img className="aspect-[3/2] rounded-lg shadow" src={account.imgUrl} alt="" />
+                    </Link>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="text-base/6 font-semibold">
+                      <Link href={`/accounts/${account.id}`}>{account.name}</Link>
+                    </div>
+                    <div className="text-xs/6 text-zinc-500">{account.date}</div>
+                    <div className="flex items-center gap-3">
+                      <UsersIcon className="size-4 shrink-0 fill-zinc-400 dark:fill-zinc-500" />
+                      <div className="text-xs/6 text-zinc-600">{account.followers}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <Badge className="max-sm:hidden" color={account.status === 'On Sale' ? 'lime' : 'zinc'}>
+                    {account.status}
+                  </Badge>
+                  <button>${account.price}</button>
+                </div>
+              </div>
+            </li>
+          </>
+        ))}
+      </ul>
+    </>
+  )
 }
