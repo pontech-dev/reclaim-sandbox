@@ -7,9 +7,13 @@ import { Description, Field, FieldGroup, Label } from '@/components/fieldset'
 import { Input } from '@/components/input'
 import { Link } from '@/components/link'
 import { Select } from '@/components/select'
-import { Proof, ReclaimProofRequest } from '@reclaimprotocol/js-sdk'
+import { Proof, ReclaimProofRequest, transformForOnchain } from '@reclaimprotocol/js-sdk'
+import { ethers } from 'ethers'
 import { useQRCode } from 'next-qrcode'
 import { useEffect, useState } from 'react'
+import { useAccount, useConnect, useDisconnect } from 'wagmi'
+import { polygonAmoy } from 'wagmi/chains'
+import { injected } from 'wagmi/connectors'
 
 export function SellAccount({ amount, ...props }: { amount: string } & React.ComponentPropsWithoutRef<typeof Button>) {
   let [isOpen, setIsOpen] = useState(false)
@@ -22,6 +26,11 @@ export function SellAccount({ amount, ...props }: { amount: string } & React.Com
   } | null>(null)
   const { Canvas } = useQRCode()
   const [reclaimProofRequest, setReclaimProofRequest] = useState<ReclaimProofRequest | null>(null)
+  const [proof, setProof] = useState<Proof | null>(null)
+
+  const { address, isConnected } = useAccount()
+  const { connect } = useConnect()
+  const { disconnect } = useDisconnect()
 
   async function initializeReclaimProofRequest() {
     try {
@@ -95,6 +104,8 @@ export function SellAccount({ amount, ...props }: { amount: string } & React.Com
       await reclaimProofRequest.startSession({
         onSuccess: async (proof: Proof) => {
           console.log('Proof received:', proof)
+          setProof(proof)
+          window.localStorage.setItem('proof', JSON.stringify(proof))
           console.log('JSON.parse(proof.claimData.context)', JSON.parse(proof.claimData.context))
           const jsonObject = JSON.parse(proof.claimData.context)
           const metricString = jsonObject.extractedParameters.metric
@@ -109,6 +120,117 @@ export function SellAccount({ amount, ...props }: { amount: string } & React.Com
     } catch (error) {
       console.error('Error starting verification session:', error)
     }
+  }
+
+  const testVerification = async () => {
+    // if (!proof) {
+    //   return
+    // }
+    // console.log('testVerification', proof)
+    // const result = await verifyProof(proof)
+    // console.log('verifyProof result', result)
+
+    const proofString = window.localStorage.getItem('proof')
+    if (!proofString) {
+      return
+    }
+    const proof = JSON.parse(proofString)
+
+    const forOnchain = transformForOnchain(proof)
+    const provider = new ethers.BrowserProvider((window as any).ethereum)
+    const signer = await provider.getSigner()
+
+    //onchainでverifyする
+    const contract = new ethers.Contract(
+      '0xcd94A4f7F85dFF1523269C52D0Ab6b85e9B22866', // polygon amoy testnet
+      [
+        {
+          inputs: [
+            {
+              components: [
+                {
+                  components: [
+                    {
+                      internalType: 'string',
+                      name: 'provider',
+                      type: 'string',
+                    },
+                    {
+                      internalType: 'string',
+                      name: 'parameters',
+                      type: 'string',
+                    },
+                    {
+                      internalType: 'string',
+                      name: 'context',
+                      type: 'string',
+                    },
+                  ],
+                  internalType: 'struct Claims.ClaimInfo',
+                  name: 'claimInfo',
+                  type: 'tuple',
+                },
+                {
+                  components: [
+                    {
+                      components: [
+                        {
+                          internalType: 'bytes32',
+                          name: 'identifier',
+                          type: 'bytes32',
+                        },
+                        {
+                          internalType: 'address',
+                          name: 'owner',
+                          type: 'address',
+                        },
+                        {
+                          internalType: 'uint32',
+                          name: 'timestampS',
+                          type: 'uint32',
+                        },
+                        {
+                          internalType: 'uint32',
+                          name: 'epoch',
+                          type: 'uint32',
+                        },
+                      ],
+                      internalType: 'struct Claims.CompleteClaimData',
+                      name: 'claim',
+                      type: 'tuple',
+                    },
+                    {
+                      internalType: 'bytes[]',
+                      name: 'signatures',
+                      type: 'bytes[]',
+                    },
+                  ],
+                  internalType: 'struct Claims.SignedClaim',
+                  name: 'signedClaim',
+                  type: 'tuple',
+                },
+              ],
+              internalType: 'struct Reclaim.Proof',
+              name: 'proof',
+              type: 'tuple',
+            },
+          ],
+          name: 'verifyProof',
+          outputs: [
+            {
+              internalType: 'bool',
+              name: '',
+              type: 'bool',
+            },
+          ],
+          stateMutability: 'nonpayable',
+          type: 'function',
+        },
+      ],
+      signer
+    )
+    const kekka = await contract.verifyProof(forOnchain)
+    console.log('onchain verify kekka', kekka)
   }
 
   return (
@@ -177,7 +299,11 @@ export function SellAccount({ amount, ...props }: { amount: string } & React.Com
           <Button plain onClick={() => setIsOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={() => setIsOpen(false)}>List for Sale</Button>
+          {isConnected ? (
+            <Button onClick={() => testVerification()}>List for Sale</Button>
+          ) : (
+            <Button onClick={() => connect({ chainId: polygonAmoy.id, connector: injected() })}> connect wallet</Button>
+          )}
         </DialogActions>
       </Dialog>
     </>
